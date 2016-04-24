@@ -53,8 +53,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onClick(View v)
     {
-        System.out.println("Clicked"+ v);
-        if(v == ipText && ipText.getText().equals("Enter server IP"))
+        System.out.println(ipText.getText());
+        if(R.id.ipView == v.getId())
             ipText.setText("");
         if(v == portText && portText.getText().equals("Enter port"))
             portText.setText("");
