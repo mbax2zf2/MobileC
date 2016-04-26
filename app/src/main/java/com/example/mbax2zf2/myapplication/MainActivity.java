@@ -17,6 +17,9 @@ import java.net.InetAddress;
 
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.concurrent.ExecutionException;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
@@ -25,6 +28,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public String iptxt;
     public String  porttxt;
     public Socket sock;
+    public byte[] response;
 
 
     @Override
@@ -73,106 +77,240 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             portText.setText("");
     }
 
-    public void sendMsg(View v)
-    {
-        System.out.println("Button Clicked");
+    public void processTask(View v){
+        EditText opt = (EditText) findViewById(R.id.optText);
+        opt.setText("");
         String server_addr=ipText.getText().toString();
         int port = Integer.parseInt(portText.getText().toString());
         Spinner spinner = (Spinner) findViewById(R.id.spinner);
         String msg = String.valueOf(spinner.getSelectedItem());
-        new clientSockets(server_addr,port,msg).execute();
+        switch(msg) {
+            case "NACK1":
+                Task1(msg,opt,server_addr,port);
+                break;
+            case "NACK2":
+                Task2(msg,opt,server_addr,port);
+                break;
+            case "NACK3":
+                Task3(msg,opt,server_addr,port);
+                break;/*
+            case "NACK4":
+                Task4(msg,opt,server_addr,port);
+                break;
+            case "NACK5":
+                Task5(msg,opt,server_addr,port);
+            case "NACK6":
+                Task6(msg,opt,server_addr,port);
+                */
+        }
+    }
 
+    public void Task1(String msg, final EditText opt,String ip, int port){
+        System.out.println("Request Sent");
+
+        new clientSocket(ip,port,msg,new clientSocket.AsyncResponse(){
+
+            @Override
+            public void processFinish(byte[] output){
+                //Here you will receive the result fired from async class
+                //of onPostExecute(result) method.
+                String result = new String(output);
+                opt.append("ASCII String Received: " + result);
+
+            }
+        }).execute();
 
     }
 
-    class clientSockets extends AsyncTask<Void, Void, String> {
-        private String ip;
-        private int portNo;
-        private String sentence;
+    public void Task2(String msg, final EditText opt,String ip, int port){
+        new clientSocket(ip,port,msg,new clientSocket.AsyncResponse(){
 
-        public clientSockets(String ipAddr, int port, String msg)
-        {
-            super();
-            this.ip=ipAddr;
-            this.portNo=port;
-            this.sentence=msg;
-        }
+            @Override
+            public void processFinish(byte[] data){
+                //Here you will receive the result fired from async class
+                //of onPostExecute(result) method.
+                String result = new String(data);
+                //calculate CRC as byte
+                byte crc = CRC8(data);
+                //convert to unsigned int to compare with original CRC
+                int c = crc & 0xFF;
+                opt.append("ASCII String Received: " + result +"\n");
+                opt.append("CRC of Original String: " + data[data.length - 1] + "\n");
+                opt.append("Calculated CRC: " + c);
 
-        @Override
-        protected String doInBackground(Void... params){
-            String response = "";
-            try {
-                DatagramSocket clientSocket = new DatagramSocket();
-                InetAddress IPAddress = InetAddress.getByName(ip);
-                byte[] sendData;
-                byte[] receiveData = new byte[1024];
-                sendData = sentence.getBytes();
-                DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, portNo);
-                clientSocket.send(sendPacket);
-                clientSocket.setSoTimeout(3000);
-                DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-                clientSocket.receive(receivePacket);
-                byte[] data = new byte[receivePacket.getLength()];
-                System.arraycopy(receivePacket.getData(), receivePacket.getOffset(), data, 0, receivePacket.getLength());
-                response = new String(data);
-                System.out.println("FROM SERVER:" + response);
-                clientSocket.close();
             }
-            catch (Exception e){
-                System.err.println(e);
-            }
-            return response;
-        }
+        }).execute();
 
-        @Override
-        protected void onPostExecute(String resp){
-            System.out.println("Task finished");
-            EditText opt = (EditText) findViewById(R.id.optText);
-            byte[] data = resp.getBytes();
-            byte crc = CRC8(data);
-            int c = crc & 0xFF;
-            opt.setText("");
-            opt.append("ASCII string received: " + resp + "\n");
-            opt.append("CRC of original string: " + data[data.length-1] + "\n");
-            opt.append("CRC of received string without CRC: " + c + "\n");
-        }
+    }
 
-        protected byte CRC8(byte[] data){
-            byte crc = data[data.length-1];
-            byte generatorRemainder = 0b00000111;    //First bit is omitted
-            // A popular variant complements remainderPolynomial here
-            byte remainderPolynomial = 0x00;
-            for (int i=0; i< data.length-1; i++) {
-                remainderPolynomial = (byte) (data[i]^remainderPolynomial);
-                for(int j=0; j<8; j++)
-                {    //  8 bits per byte
-                    if ((remainderPolynomial&0b10000000)!=0) {
-                        remainderPolynomial  = (byte)((remainderPolynomial << 1)^generatorRemainder);
-                    } else {
-                        remainderPolynomial  = (byte)(remainderPolynomial << 1);
+    public void Task3(final String msg, final EditText opt, final String ip, final int port){
+        new clientSocket(ip,port,msg,new clientSocket.AsyncResponse(){
+
+            @Override
+            public void processFinish(byte[] data){
+                //Here you will receive the result fired from async class
+                //of onPostExecute(result) method.
+                String result = new String(data);
+                final ArrayList<int[]> dataList = new ArrayList<>();
+                int[] response = getIntArray(data);
+                {
+                    if(checkCRC(response)){
+                        opt.append("ASCII String received correctly: \n");
+                        opt.append(result);
+                    }
+                    else
+                    {
+                        new clientSocket(ip,port,msg,new clientSocket.AsyncResponse(){
+
+                            @Override
+                            public void processFinish(byte[] data){
+
+                            }
+                        }).execute();
                     }
                 }
+
             }
-            // A popular variant complements remainderPolynomial here
-            return remainderPolynomial;
+        }).execute();
+    }
+
+    protected int[] getIntArray(byte[] data){
+        int[] newData = new int[data.length*8];
+        bytetobin(data,newData);
+        return newData;
+    }
+
+    protected boolean checkCRC(int[] data)
+    {
+        int[] newData = new int[data.length-8];
+        int[] dataCRC = new int[8];
+        for(int i=0; i<newData.length;i++)
+            newData[i]=data[i];
+        for(int i=0; i<dataCRC.length;i++)
+            dataCRC[i]=data[data.length-8+i];
+        int[] calcCRC = intArrayCRC(newData);
+        return Arrays.equals(dataCRC,calcCRC);
+    }
+
+    protected  int[] intArrayCRC(int[] data){
+        int[] generatorRemainder = {0,0,0,0,0,1,1,1};    //First bit is omitted
+        // A popular variant complements remainderPolynomial here
+        int[] remainderPolynomial = {0,0,0,0,0,0,0,0};
+        int[] temp = new int[8];
+        for (int i=0; i< data.length-1; i+=8) {
+            for(int j=0; j<8; j++)
+                temp[j] = data[i+j];
+            remainderPolynomial = xor(temp,remainderPolynomial);
+            for(int j=0; j<8; j++)
+            {    //  8 bits per byte
+                if ((remainderPolynomial[0] & 1)!=0) { // AND 0b10000000
+                    remainderPolynomial  = xor(lfs(remainderPolynomial), generatorRemainder);
+                } else {
+                    remainderPolynomial  = lfs(remainderPolynomial);
+                }
+            }
+        }
+        // A popular variant complements remainderPolynomial here
+        return remainderPolynomial;
+    }
+
+    protected byte CRC8(byte[] data){
+        byte generatorRemainder = (byte)0b00000111;    //First bit is omitted
+        // A popular variant complements remainderPolynomial here
+        byte remainderPolynomial = 0;
+        for (int i=0; i< data.length-1; i+=1) {
+            remainderPolynomial = (byte) (data[i]^remainderPolynomial);
+            for(int j=0; j<8; j++)
+            {    //  8 bits per byte
+                if ((remainderPolynomial& 0b10000000)!=0) { // AND 0b10000000
+                    remainderPolynomial  = (byte)((remainderPolynomial << 1)^generatorRemainder);
+                } else {
+                    remainderPolynomial  = (byte)(remainderPolynomial << 1);
+                }
+            }
+        }
+        // A popular variant complements remainderPolynomial here
+        return remainderPolynomial;
+    }
+
+    protected int[] compareAndGenerate(int[] first, int[] second)
+    {
+        int[] diff = xor(first, second);
+        ArrayList<Integer> differ = new ArrayList<Integer>();
+        for(int i=0; i<diff.length; i++)
+        {
+            if(1==diff[i])
+                differ.add(i);
         }
 
+        return null;
+    }
 
-        public void deci2bin(int d, int size, int []b)
-        {
-            b[size-1] = d&0x01;
-            for (int i = size - 2; i >= 0; i--) {
-                d = d >> 1;
-                b[i] = d & 0x01;
+
+        protected int[] permuAllDiffers(ArrayList<Integer> differs, int[] message,int index){
+            if(differs.size() < index)
+            {
+                return null;
             }
+            int i= differs.get(index);
+            if(true == checkCRC(message)){
+                return message;
+            }
+            else{
+                if(0 == message[i])
+                    message[i]=1;
+                else if(1 == message[i])
+                    message[i]=0;
+            }
+            return null;
         }
 
-        public int bin2deci(int []b, int size)
+    protected int[] xor(int[] arg1, int[] arg2)
+    {
+        if(arg1.length != arg2.length){
+            System.out.println("Arguments have different size! Pls check!");
+            return null;
+        }
+        int[] result = new int[arg1.length];
+        for(int i=0; i<arg1.length; i++)
         {
-            int i, d=0;
-            for (i = 0; i < size; i++)
-                d += b[i] << (size - i - 1);
-            return(d);
+            result[i] = arg1[i]^arg2[i];
+        }
+        return result;
+    }
+
+    protected int[] lfs(int[] param)
+    {
+        int[] temp = new int[param.length];
+        for(int i=0; i<param.length;i++){
+            if(param.length-1 == i) {
+                temp[i] = 0;
+                break;
+            }
+            temp[i]=param[i+1];
+        }
+        return temp;
+    }
+
+    public static void bytetobin(byte[] b,int[] result)
+    {
+        int size = b.length;
+        for(int i=0; i<b.length;i++)
+        {
+            int[] temp = new int[8];
+            deci2bin((int)b[i],8,temp);
+            for(int j=0; j<8; j++)
+                result[i*8+j]=temp[j];
         }
     }
+
+    public static void deci2bin(int d, int size, int []b)
+    {
+        b[size-1] = d&0x01;
+        for (int i = size - 2; i >= 0; i--) {
+            d = d >> 1;
+            b[i] = d & 0x01;
+        }
+    }
+
 }

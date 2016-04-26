@@ -1,8 +1,8 @@
 <resources>
     <string name="app_name">My Application</string>
     <string name="action_settings">Settings</string>
-    <string name="ipview">10.223.193.134</string>
-    <string name="portview">12345</string>
+    <string name="ipview">192.168.0.100</string>
+    <string name="portview">5000</string>
     <string name="spinner_title">Select Task</string>
     <string-array name="Task_array">
         <item>NACK1</item>
